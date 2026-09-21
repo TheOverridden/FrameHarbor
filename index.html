@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0d12" />
+    <meta
+      name="description"
+      content="FrameHarbor is a private, single-page video browser powered by public Piped instances."
+    />
+    <title>FrameHarbor</title>
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <svg class="svg-defs" aria-hidden="true">
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></symbol>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-7 9 7v9H7v-7h10v7"/></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4Z"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7-.7-2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7 2-.7Z"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 5.8a5.5 5.5 0 0 0-7.8 0L12 6.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="19" r="2"/><path d="m8 11 8-5M8 13l8 5"/></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    </svg>
+
+    <header class="topbar">
+      <button class="icon-button menu-toggle" type="button" aria-label="Toggle navigation" data-action="toggle-nav">
+        <svg><use href="#i-menu"></use></svg>
+      </button>
+      <a class="brand" href="./" data-route aria-label="FrameHarbor home">
+        <span class="brand-mark"><svg><use href="#i-play"></use></svg></span>
+        <span>Frame<span>Harbor</span></span>
+      </a>
+      <form class="search" id="search-form" role="search" autocomplete="off">
+        <label class="sr-only" for="search-input">Search videos</label>
+        <div class="search-field">
+          <input id="search-input" type="search" placeholder="Search videos" spellcheck="false" />
+          <div id="suggestions" class="suggestions" hidden></div>
+        </div>
+        <button class="search-button" type="submit" aria-label="Search">
+          <svg><use href="#i-search"></use></svg>
+        </button>
+      </form>
+      <div class="top-actions">
+        <button class="icon-button" type="button" aria-label="Toggle theme" data-action="toggle-theme">
+          <svg><use href="#i-sun"></use></svg>
+        </button>
+        <button class="avatar-button" type="button" aria-label="Open settings" data-action="open-settings">FH</button>
+      </div>
+    </header>
+
+    <aside class="sidebar" aria-label="Main navigation">
+      <nav>
+        <a href="./" data-route data-nav="home"><svg><use href="#i-home"></use></svg><span>Home</span></a>
+        <a href="?page=explore" data-route data-nav="explore"><svg><use href="#i-compass"></use></svg><span>Explore</span></a>
+        <div class="nav-divider"></div>
+        <a href="?page=history" data-route data-nav="history"><svg><use href="#i-clock"></use></svg><span>History</span></a>
+        <a href="?page=saved" data-route data-nav="saved"><svg><use href="#i-bookmark"></use></svg><span>Saved</span></a>
+        <div class="nav-divider"></div>
+        <button type="button" data-action="open-settings"><svg><use href="#i-settings"></use></svg><span>Settings</span></button>
+      </nav>
+      <footer>
+        <p>Privacy-first playback through public Piped infrastructure.</p>
+        <span>FrameHarbor is not affiliated with YouTube or Piped.</span>
+      </footer>
+    </aside>
+
+    <div class="scrim" data-action="toggle-nav"></div>
+    <main id="app" tabindex="-1" aria-live="polite"></main>
+    <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+
+    <dialog id="settings-dialog" class="settings-dialog">
+      <form method="dialog" class="dialog-shell" id="settings-form">
+        <div class="dialog-head">
+          <div><span class="eyebrow">Playback preferences</span><h2>Settings</h2></div>
+          <button class="icon-button" value="cancel" aria-label="Close settings"><svg><use href="#i-x"></use></svg></button>
+        </div>
+        <label>Region
+          <select id="region-select">
+            <option value="US">United States</option><option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option><option value="AU">Australia</option>
+            <option value="DE">Germany</option><option value="FR">France</option>
+            <option value="IN">India</option><option value="JP">Japan</option>
+          </select>
+        </label>
+        <label>Piped API instance
+          <select id="instance-select"></select>
+        </label>
+        <label>Custom API URL <span class="label-note">optional</span>
+          <input id="custom-instance" type="url" placeholder="https://pipedapi.example.com" />
+        </label>
+        <label class="switch-row">
+          <span><b>Automatic failover</b><small>Try another healthy instance when requests fail.</small></span>
+          <input id="failover-toggle" type="checkbox" checked />
+        </label>
+        <div class="dialog-actions">
+          <button class="button secondary" value="cancel">Cancel</button>
+          <button class="button primary" value="default" data-action="save-settings">Save changes</button>
+        </div>
+      </form>
+    </dialog>
+
+    <noscript><div class="noscript">FrameHarbor needs JavaScript to search and play videos.</div></noscript>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

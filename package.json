@@ -1,0 +1,12 @@
+{
+  "name": "frameharbor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A single-page, privacy-minded video browser powered by public Piped instances.",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check app.js && node --check lib.js && node --check service-worker.js"
+  },
+  "license": "MIT"
+}
