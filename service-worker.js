@@ -1,5 +1,5 @@
-const CACHE = "frameharbor-shell-v9";
-const SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./lib.js", "./assets/icon.svg", "./manifest.webmanifest"];
+const CACHE = "frameharbor-shell-v10";
+const SHELL = ["./", "./index.html", "./styles.css?v=10", "./app.js?v=8", "./lib.js?v=3", "./assets/icon.svg", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
