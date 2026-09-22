@@ -19,7 +19,7 @@ import {
   sortProgressiveStreams,
   uniqueVideos,
   videoIdFromUrl
-} from "./lib.js";
+} from "./lib.js?v=2";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const app = $("#app");
