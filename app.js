@@ -284,7 +284,7 @@ const api = {
 function avatar(url, name, className = "channel-avatar") {
   const src = safeUrl(url);
   return src
-    ? `<img class="${className}" src="${escapeHtml(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+    ? `<img class="${className}" src="${escapeHtml(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />`
     : `<span class="${className} avatar-fallback" aria-hidden="true">${escapeHtml(initials(name))}</span>`;
 }
 
@@ -292,7 +292,7 @@ function thumbnail(video) {
   const duration = video.livestream ? "LIVE" : formatDuration(video.duration);
   const src = safeUrl(video.thumbnail);
   return `<div class="thumbnail">
-    ${src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ""}
+    ${src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" />` : ""}
     ${duration ? `<span class="duration ${video.livestream ? "live-badge" : ""}">${escapeHtml(duration)}</span>` : ""}
   </div>`;
 }
