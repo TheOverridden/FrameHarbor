@@ -1,5 +1,6 @@
 import {
   DEFAULT_INSTANCES,
+  INVIDIOUS_INSTANCES,
   INSTANCE_LIST_URL,
   channelIdFromPath,
   cleanApiUrl,
@@ -7,6 +8,7 @@ import {
   formatDate,
   formatDuration,
   getRoute,
+  normalizeInvidiousVideo,
   normalizeYoutubeVideo,
   normalizeVideo,
   parseApiKeys,
@@ -36,6 +38,7 @@ function loadState() {
     searchProvider: "auto",
     youtubeKeys: [],
     youtubeKeyIndex: 0,
+    invidiousInstance: INVIDIOUS_INSTANCES[0],
     fastPlayback: true,
     history: [],
     saved: []
@@ -63,8 +66,8 @@ const state = {
 };
 
 function persist() {
-  const { theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, fastPlayback, history, saved } = state;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, fastPlayback, history, saved }));
+  const { theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, invidiousInstance, fastPlayback, history, saved } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, invidiousInstance, fastPlayback, history, saved }));
 }
 
 function escapeHtml(value = "") {
@@ -188,33 +191,93 @@ class YoutubeClient {
   }
 }
 
+class InvidiousClient {
+  candidates() {
+    return [...new Set([state.invidiousInstance, ...INVIDIOUS_INSTANCES].filter(Boolean))];
+  }
+
+  async request(path, { timeout = 3500 } = {}) {
+    const candidates = this.candidates();
+    let lastError;
+    for (let offset = 0; offset < candidates.length; offset += 2) {
+      const group = candidates.slice(offset, offset + 2);
+      const controllers = group.map(() => new AbortController());
+      try {
+        const attempts = group.map(async (base, index) => {
+          const controller = controllers[index];
+          const timer = setTimeout(() => controller.abort(), timeout);
+          try {
+            const response = await fetch(`${base}${path}`, { signal: controller.signal, headers: { Accept: "application/json" } });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            return { base, data };
+          } finally {
+            clearTimeout(timer);
+          }
+        });
+        const winner = await Promise.any(attempts);
+        controllers.forEach((controller) => controller.abort());
+        state.invidiousInstance = winner.base;
+        persist();
+        return winner.data;
+      } catch (error) {
+        lastError = error;
+        controllers.forEach((controller) => controller.abort());
+      }
+    }
+    throw new Error(lastError?.message || "Every Invidious provider failed.");
+  }
+
+  async search(query) {
+    const data = await this.request(`/api/v1/search?q=${encodeURIComponent(query)}&type=video&region=${encodeURIComponent(state.region)}`);
+    return (Array.isArray(data) ? data : []).filter((item) => item.type === "video").map(normalizeInvidiousVideo);
+  }
+
+  async trending() {
+    const data = await this.request(`/api/v1/trending?region=${encodeURIComponent(state.region)}&type=default`);
+    return (Array.isArray(data) ? data : []).map(normalizeInvidiousVideo);
+  }
+
+  async suggestions(query) {
+    const data = await this.request(`/api/v1/search/suggestions?q=${encodeURIComponent(query)}`, { timeout: 2200 });
+    return data?.suggestions || [];
+  }
+}
+
 const piped = new PipedClient();
 const youtube = new YoutubeClient();
+const invidious = new InvidiousClient();
 
 const api = {
   candidates: () => piped.candidates(),
   streams: (id) => piped.streams(id),
   comments: (id) => piped.comments(id),
   channel: (id) => piped.channel(id),
-  suggestions: (query) => piped.suggestions(query),
+  async suggestions(query) {
+    try { return await invidious.suggestions(query); }
+    catch { return piped.suggestions(query); }
+  },
   async search(query) {
-    if (state.searchProvider !== "piped" && state.youtubeKeys.length) {
+    if (state.searchProvider === "youtube") return youtube.search(query);
+    if (state.searchProvider === "auto" && state.youtubeKeys.length) {
       try { return await youtube.search(query); }
       catch (error) {
-        if (state.searchProvider === "youtube") throw error;
-        toast("YouTube API unavailable", "Using Piped backup.");
+        toast("YouTube API unavailable", "Using a community backup.");
       }
     }
-    return piped.search(query);
+    try { return await invidious.search(query); }
+    catch { return piped.search(query); }
   },
   async trending() {
-    if (state.searchProvider !== "piped" && state.youtubeKeys.length) {
+    if (state.searchProvider === "youtube") return youtube.trending();
+    if (state.searchProvider === "auto" && state.youtubeKeys.length) {
       try { return await youtube.trending(); }
       catch (error) {
-        if (state.searchProvider === "youtube") throw error;
+        toast("YouTube API unavailable", "Using a community backup.");
       }
     }
-    return piped.trending();
+    try { return await invidious.trending(); }
+    catch { return piped.trending(); }
   }
 };
 
@@ -400,7 +463,7 @@ async function renderHome(explore = false) {
     const videos = uniqueVideos(Array.isArray(data) ? data : data?.items || []);
     $("#feed").innerHTML = videos.length ? `<div class="video-grid">${videos.map(videoCard).join("")}</div>` : emptyState("Nothing surfaced", "This Piped instance returned an empty trending feed.");
   } catch (error) {
-    if (token === state.requestToken) $("#feed").innerHTML = emptyState("The harbor is quiet", `${error.message} Search is still available above.`);
+    if (token === state.requestToken) $("#feed").innerHTML = emptyState("Popular feed temporarily unavailable", "Search directly above, or add a free YouTube Data API key in Settings for the most reliable results.");
   }
 }
 

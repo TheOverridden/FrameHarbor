@@ -7,6 +7,14 @@ export const DEFAULT_INSTANCES = [
   { name: "Garuda Linux", api: "https://piped-api.garudalinux.org" }
 ];
 
+export const INVIDIOUS_INSTANCES = [
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://yt.chocolatemoo53.com",
+  "https://invidious.tiekoetter.com",
+  "https://invidious.f5.si"
+];
+
 export const INSTANCE_LIST_URL =
   "https://raw.githubusercontent.com/TeamPiped/documentation/refs/heads/main/content/docs/public-instances/index.md";
 
@@ -48,6 +56,26 @@ export function normalizeYoutubeVideo(item = {}) {
     uploaderUrl: snippet.channelId ? `/channel/${snippet.channelId}` : "",
     shortDescription: snippet.description,
     isLive: snippet.liveBroadcastContent === "live"
+  });
+}
+
+export function normalizeInvidiousVideo(item = {}) {
+  const thumbnails = item.videoThumbnails || [];
+  const thumbnail = thumbnails.find((entry) => entry.quality === "maxresdefault")?.url
+    || thumbnails.find((entry) => entry.quality === "medium")?.url
+    || thumbnails.at(-1)?.url
+    || "";
+  return normalizeVideo({
+    id: item.videoId,
+    title: item.title,
+    thumbnail,
+    duration: item.lengthSeconds,
+    views: item.viewCount,
+    uploadedDate: item.publishedText,
+    uploaderName: item.author,
+    uploaderUrl: item.authorUrl || (item.authorId ? `/channel/${item.authorId}` : ""),
+    shortDescription: item.description,
+    isLive: item.liveNow
   });
 }
 
