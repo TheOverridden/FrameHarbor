@@ -7,6 +7,7 @@ import {
   formatDuration,
   getRoute,
   normalizeVideo,
+  normalizeInvidiousVideo,
   normalizeYoutubeVideo,
   parseApiKeys,
   parseInstanceMarkdown,
@@ -39,6 +40,14 @@ test("normalizes YouTube Data API videos", () => {
   assert.equal(video.duration, 65);
   assert.equal(video.views, 1200);
   assert.equal(video.uploaderUrl, "/channel/UC1");
+});
+
+test("normalizes Invidious search results", () => {
+  const video = normalizeInvidiousVideo({ videoId: "xyz789", title: "Backup", author: "Creator", authorId: "UC2", lengthSeconds: 42, viewCount: 900, videoThumbnails: [{ quality: "medium", url: "https://img.example/backup.jpg" }] });
+  assert.equal(video.id, "xyz789");
+  assert.equal(video.duration, 42);
+  assert.equal(video.uploader, "Creator");
+  assert.equal(video.uploaderUrl, "/channel/UC2");
 });
 
 test("extracts video and channel IDs", () => {
