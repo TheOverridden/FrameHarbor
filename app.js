@@ -7,7 +7,9 @@ import {
   formatDate,
   formatDuration,
   getRoute,
+  normalizeYoutubeVideo,
   normalizeVideo,
+  parseApiKeys,
   parseInstanceMarkdown,
   plainText,
   routeForChannel,
@@ -31,12 +33,22 @@ function loadState() {
     region: "US",
     instance: DEFAULT_INSTANCES[0].api,
     failover: true,
+    searchProvider: "auto",
+    youtubeKeys: [],
+    youtubeKeyIndex: 0,
+    fastPlayback: true,
     history: [],
     saved: []
   };
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return { ...fallback, ...stored, history: stored.history || [], saved: stored.saved || [] };
+    return {
+      ...fallback,
+      ...stored,
+      youtubeKeys: Array.isArray(stored.youtubeKeys) ? stored.youtubeKeys.filter((key) => typeof key === "string") : [],
+      history: Array.isArray(stored.history) ? stored.history : [],
+      saved: Array.isArray(stored.saved) ? stored.saved : []
+    };
   } catch {
     return fallback;
   }
@@ -51,8 +63,8 @@ const state = {
 };
 
 function persist() {
-  const { theme, region, instance, failover, history, saved } = state;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, region, instance, failover, history, saved }));
+  const { theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, fastPlayback, history, saved } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, fastPlayback, history, saved }));
 }
 
 function escapeHtml(value = "") {
@@ -121,15 +133,90 @@ class PipedClient {
     throw new Error(lastError?.name === "AbortError" ? "The video service timed out." : lastError?.message || "Every configured video service failed.");
   }
 
-  trending() { return this.request(`/trending?region=${encodeURIComponent(state.region)}`); }
-  search(query) { return this.request(`/search?q=${encodeURIComponent(query)}&filter=videos`); }
-  suggestions(query) { return this.request(`/suggestions?query=${encodeURIComponent(query)}`, { timeout: 7000 }); }
+  trending() { return this.request(`/trending?region=${encodeURIComponent(state.region)}`, { timeout: 4500, maxAttempts: 1 }); }
+  search(query) { return this.request(`/search?q=${encodeURIComponent(query)}&filter=videos`, { timeout: 6500, maxAttempts: 2 }); }
+  suggestions(query) { return this.request(`/suggestions?query=${encodeURIComponent(query)}`, { timeout: 2500, maxAttempts: 1 }); }
   streams(id) { return this.request(`/streams/${encodeURIComponent(id)}`, { timeout: 8000, maxAttempts: 2 }); }
   comments(id) { return this.request(`/comments/${encodeURIComponent(id)}`, { timeout: 8000, maxAttempts: 2 }); }
-  channel(id) { return this.request(`/channel/${encodeURIComponent(id)}`, { timeout: 16000 }); }
+  channel(id) { return this.request(`/channel/${encodeURIComponent(id)}`, { timeout: 8000, maxAttempts: 2 }); }
 }
 
-const api = new PipedClient();
+class YoutubeClient {
+  async request(resource, params = {}, { timeout = 6500 } = {}) {
+    const keys = state.youtubeKeys || [];
+    if (!keys.length) throw new Error("No YouTube API keys are configured.");
+    let lastError;
+    for (let offset = 0; offset < keys.length; offset += 1) {
+      const index = (state.youtubeKeyIndex + offset) % keys.length;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const url = new URL(`https://www.googleapis.com/youtube/v3/${resource}`);
+        Object.entries({ ...params, key: keys[index] }).forEach(([name, value]) => url.searchParams.set(name, value));
+        const response = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body?.error?.message || `YouTube API returned ${response.status}`);
+        }
+        const data = await response.json();
+        if (index !== state.youtubeKeyIndex) toast("YouTube API key rotated", `Using backup key ${index + 1}.`);
+        state.youtubeKeyIndex = index;
+        persist();
+        return data;
+      } catch (error) {
+        lastError = error;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw new Error(lastError?.name === "AbortError" ? "The YouTube API timed out." : lastError?.message || "Every YouTube API key failed.");
+  }
+
+  async search(query) {
+    const data = await this.request("search", { part: "snippet", type: "video", maxResults: "25", regionCode: state.region, q: query });
+    return (data.items || []).map(normalizeYoutubeVideo);
+  }
+
+  async trending() {
+    const data = await this.request("videos", { part: "snippet,contentDetails,statistics", chart: "mostPopular", maxResults: "24", regionCode: state.region });
+    return (data.items || []).map(normalizeYoutubeVideo);
+  }
+
+  async video(id) {
+    const data = await this.request("videos", { part: "snippet,contentDetails,statistics", id });
+    return data.items?.[0] ? normalizeYoutubeVideo(data.items[0]) : null;
+  }
+}
+
+const piped = new PipedClient();
+const youtube = new YoutubeClient();
+
+const api = {
+  candidates: () => piped.candidates(),
+  streams: (id) => piped.streams(id),
+  comments: (id) => piped.comments(id),
+  channel: (id) => piped.channel(id),
+  suggestions: (query) => piped.suggestions(query),
+  async search(query) {
+    if (state.searchProvider !== "piped" && state.youtubeKeys.length) {
+      try { return await youtube.search(query); }
+      catch (error) {
+        if (state.searchProvider === "youtube") throw error;
+        toast("YouTube API unavailable", "Using Piped backup.");
+      }
+    }
+    return piped.search(query);
+  },
+  async trending() {
+    if (state.searchProvider !== "piped" && state.youtubeKeys.length) {
+      try { return await youtube.trending(); }
+      catch (error) {
+        if (state.searchProvider === "youtube") throw error;
+      }
+    }
+    return piped.trending();
+  }
+};
 
 function avatar(url, name, className = "channel-avatar") {
   const src = safeUrl(url);
@@ -225,6 +312,37 @@ function renderEmbedFallback(videoId, reason = "The public Piped instances could
   document.title = "Watch · FrameHarbor";
 }
 
+async function renderFastWatch(videoId) {
+  setActiveNav("");
+  const token = ++state.requestToken;
+  const known = state.history.find((item) => item.id === videoId) || state.saved.find((item) => item.id === videoId);
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&rel=0`;
+  app.innerHTML = `<section class="watch-page fallback-watch">
+    <div class="watch-main">
+      <div class="player-shell"><iframe src="${escapeHtml(embedUrl)}" title="Video player" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+      <h1 class="watch-title">${escapeHtml(known?.title || "Video")}</h1>
+      <div class="watch-meta-row"><div class="channel-block"><span class="watch-avatar avatar-fallback">FH</span><span><b id="fast-channel">${escapeHtml(known?.uploader || "FrameHarbor fast player")}</b><small>Privacy-enhanced YouTube embed</small></span></div>
+        <div class="watch-actions"><button class="action-pill ${isSaved(videoId) ? "active" : ""}" type="button" data-action="toggle-save" data-video-id="${escapeHtml(videoId)}">${icon("bookmark")}<span>${isSaved(videoId) ? "Saved" : "Save"}</span></button><button class="action-pill" type="button" data-action="share">${icon("share")}<span>Share</span></button></div></div>
+      <div class="description-box" id="fast-description"><strong>Fast playback</strong> · No Piped wait\n\nThe video is embedded inside FrameHarbor using YouTube’s privacy-enhanced domain.</div>
+    </div>
+    <aside class="watch-side"><div class="empty-state"><div class="empty-icon">${icon("play")}</div><h1>Instant playback</h1><p>Search metadata uses your configured API keys. Playback stays embedded in this page.</p><button class="button secondary" type="button" data-action="retry-watch" data-video-id="${escapeHtml(videoId)}">Try Piped player</button></div></aside>
+  </section>`;
+  document.title = `${known?.title || "Watch"} · FrameHarbor`;
+  if (known) addHistory(known);
+  if (!state.youtubeKeys.length) return;
+  try {
+    const video = await youtube.video(videoId);
+    if (!video || token !== state.requestToken) return;
+    addHistory(video);
+    $(".watch-title").textContent = video.title;
+    $("#fast-channel").textContent = video.uploader;
+    $("#fast-description").textContent = video.description || "No description provided.";
+    document.title = `${video.title} · FrameHarbor`;
+  } catch {
+    // Playback remains available even when metadata quota is exhausted.
+  }
+}
+
 function emptyState(title, message, iconName = "compass") {
   return `<div class="empty-state"><div class="empty-icon">${icon(iconName)}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></div>`;
 }
@@ -282,7 +400,7 @@ async function renderHome(explore = false) {
     const videos = uniqueVideos(Array.isArray(data) ? data : data?.items || []);
     $("#feed").innerHTML = videos.length ? `<div class="video-grid">${videos.map(videoCard).join("")}</div>` : emptyState("Nothing surfaced", "This Piped instance returned an empty trending feed.");
   } catch (error) {
-    if (token === state.requestToken) pageError("The harbor is quiet", error.message);
+    if (token === state.requestToken) $("#feed").innerHTML = emptyState("The harbor is quiet", `${error.message} Search is still available above.`);
   }
 }
 
@@ -372,6 +490,7 @@ function renderComments(data) {
 }
 
 async function renderWatch(videoId, { forceFailover = false } = {}) {
+  if (state.fastPlayback && !forceFailover) return renderFastWatch(videoId);
   setActiveNav("");
   const token = ++state.requestToken;
   if (forceFailover) {
@@ -488,6 +607,10 @@ function openSettings() {
   $("#instance-select").value = cleanApiUrl(state.instance);
   $("#custom-instance").value = state.instances.some((item) => item.api === state.instance) ? "" : state.instance;
   $("#failover-toggle").checked = state.failover;
+  $("#provider-select").value = state.searchProvider;
+  $("#youtube-api-keys").value = (state.youtubeKeys || []).join(", ");
+  $("#fast-playback-toggle").checked = state.fastPlayback;
+  $("#api-key-count").textContent = `${state.youtubeKeys.length} key${state.youtubeKeys.length === 1 ? "" : "s"} stored locally`;
   settingsDialog.showModal();
 }
 
@@ -500,11 +623,15 @@ function saveSettings() {
   state.region = $("#region-select").value;
   state.instance = custom || $("#instance-select").value;
   state.failover = $("#failover-toggle").checked;
+  state.searchProvider = $("#provider-select").value;
+  state.youtubeKeys = parseApiKeys($("#youtube-api-keys").value);
+  state.youtubeKeyIndex = Math.min(state.youtubeKeyIndex || 0, Math.max(0, state.youtubeKeys.length - 1));
+  state.fastPlayback = $("#fast-playback-toggle").checked;
   state.activeInstance = "";
   persist();
   settingsDialog.close();
   renderRoute();
-  toast("Settings saved", new URL(state.instance).host);
+  toast("Settings saved", state.youtubeKeys.length ? `${state.youtubeKeys.length} YouTube key${state.youtubeKeys.length === 1 ? "" : "s"} ready.` : "Piped fallback ready.");
   return true;
 }
 
@@ -530,6 +657,11 @@ document.addEventListener("click", (event) => {
   }
   if (action === "open-settings") openSettings();
   if (action === "save-settings") { event.preventDefault(); saveSettings(); }
+  if (action === "toggle-key-visibility") {
+    const input = $("#youtube-api-keys");
+    input.type = input.type === "password" ? "text" : "password";
+    event.target.closest("button").textContent = input.type === "password" ? "Show" : "Hide";
+  }
   if (action === "retry") renderRoute();
   if (action === "retry-watch") {
     const id = event.target.closest("[data-video-id]")?.dataset.videoId || getRoute(location.search).video;

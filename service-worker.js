@@ -1,4 +1,4 @@
-const CACHE = "frameharbor-shell-v1";
+const CACHE = "frameharbor-shell-v2";
 const SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./lib.js", "./assets/icon.svg", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

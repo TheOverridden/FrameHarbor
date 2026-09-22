@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0b0d12" />
     <meta
       name="description"
-      content="FrameHarbor is a private, single-page video browser powered by public Piped instances."
+      content="FrameHarbor is a fast, single-page video browser with YouTube API key rotation and Piped failover."
     />
     <title>FrameHarbor</title>
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
@@ -70,8 +70,8 @@
         <button type="button" data-action="open-settings"><svg><use href="#i-settings"></use></svg><span>Settings</span></button>
       </nav>
       <footer>
-        <p>Privacy-first playback through public Piped infrastructure.</p>
-        <span>FrameHarbor is not affiliated with YouTube or Piped.</span>
+        <p>Fast playback with local API-key rotation and Piped failover.</p>
+        <span>FrameHarbor is not affiliated with YouTube, Google, or Piped.</span>
       </footer>
     </aside>
 
@@ -93,6 +93,24 @@
             <option value="IN">India</option><option value="JP">Japan</option>
           </select>
         </label>
+        <div class="settings-section"><span class="eyebrow">Fast discovery</span></div>
+        <label>Search provider
+          <select id="provider-select">
+            <option value="auto">Automatic · YouTube API, then Piped</option>
+            <option value="youtube">YouTube Data API only</option>
+            <option value="piped">Piped only · no key</option>
+          </select>
+        </label>
+        <label>YouTube Data API keys <span class="label-note">optional · separate with commas</span>
+          <div class="secret-input"><input id="youtube-api-keys" type="password" autocomplete="off" spellcheck="false" placeholder="Key 1, Key 2, Key 3" /><button class="button secondary" type="button" data-action="toggle-key-visibility">Show</button></div>
+          <small id="api-key-count" class="field-note">0 keys stored locally</small>
+          <small class="field-note">Keys stay in this browser and are never added to the repository. Restrict them to the YouTube Data API and this site’s HTTP referrer in Google Cloud.</small>
+        </label>
+        <label class="switch-row">
+          <span><b>Fast embedded playback</b><small>Open the privacy-enhanced player immediately instead of waiting for Piped streams.</small></span>
+          <input id="fast-playback-toggle" type="checkbox" checked />
+        </label>
+        <div class="settings-section"><span class="eyebrow">Piped fallback</span></div>
         <label>Piped API instance
           <select id="instance-select"></select>
         </label>

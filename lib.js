@@ -21,6 +21,36 @@ export function cleanApiUrl(value = "") {
   }
 }
 
+export function parseApiKeys(value = "") {
+  return [...new Set(String(value)
+    .split(/[\s,;]+/)
+    .map((key) => key.trim())
+    .filter((key) => key.length >= 20))];
+}
+
+export function isoDurationToSeconds(value = "") {
+  const match = String(value).match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!match) return 0;
+  return (Number(match[1]) || 0) * 86400 + (Number(match[2]) || 0) * 3600 + (Number(match[3]) || 0) * 60 + (Number(match[4]) || 0);
+}
+
+export function normalizeYoutubeVideo(item = {}) {
+  const snippet = item.snippet || {};
+  const id = typeof item.id === "string" ? item.id : item.id?.videoId;
+  return normalizeVideo({
+    id,
+    title: snippet.title,
+    thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url,
+    duration: isoDurationToSeconds(item.contentDetails?.duration),
+    views: item.statistics?.viewCount,
+    uploadedDate: snippet.publishedAt,
+    uploaderName: snippet.channelTitle,
+    uploaderUrl: snippet.channelId ? `/channel/${snippet.channelId}` : "",
+    shortDescription: snippet.description,
+    isLive: snippet.liveBroadcastContent === "live"
+  });
+}
+
 export function parseInstanceMarkdown(markdown = "") {
   const seen = new Set();
   return String(markdown)
