@@ -80,6 +80,7 @@ function escapeHtml(value = "") {
 }
 
 function safeUrl(value = "") {
+  if (!String(value).trim()) return "";
   try {
     const url = new URL(value, location.href);
     return ["http:", "https:"].includes(url.protocol) ? url.href : "";
