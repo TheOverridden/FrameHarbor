@@ -96,8 +96,8 @@ class PipedClient {
     return [...new Set([current, ...list])];
   }
 
-  async request(path, { timeout = 13000 } = {}) {
-    const candidates = this.candidates();
+  async request(path, { timeout = 13000, maxAttempts = Infinity } = {}) {
+    const candidates = this.candidates().slice(0, maxAttempts);
     let lastError;
     for (let index = 0; index < candidates.length; index += 1) {
       if (index > 0 && !state.failover) break;
@@ -124,8 +124,8 @@ class PipedClient {
   trending() { return this.request(`/trending?region=${encodeURIComponent(state.region)}`); }
   search(query) { return this.request(`/search?q=${encodeURIComponent(query)}&filter=videos`); }
   suggestions(query) { return this.request(`/suggestions?query=${encodeURIComponent(query)}`, { timeout: 7000 }); }
-  streams(id) { return this.request(`/streams/${encodeURIComponent(id)}`, { timeout: 20000 }); }
-  comments(id) { return this.request(`/comments/${encodeURIComponent(id)}`, { timeout: 16000 }); }
+  streams(id) { return this.request(`/streams/${encodeURIComponent(id)}`, { timeout: 8000, maxAttempts: 2 }); }
+  comments(id) { return this.request(`/comments/${encodeURIComponent(id)}`, { timeout: 8000, maxAttempts: 2 }); }
   channel(id) { return this.request(`/channel/${encodeURIComponent(id)}`, { timeout: 16000 }); }
 }
 
