@@ -11,6 +11,7 @@ import {
   normalizeYoutubeVideo,
   parseApiKeys,
   parseInstanceMarkdown,
+  rankRecommendedVideos,
   routeForVideo,
   sortProgressiveStreams,
   uniqueVideos,
@@ -76,6 +77,19 @@ test("normalizes and deduplicates video results", () => {
   ]);
   assert.equal(videos.length, 2);
   assert.equal(normalizeVideo(videos[0]).id, "abc123");
+});
+
+test("ranks recommendations from watch, save, and search signals", () => {
+  const ranked = rankRecommendedVideos([
+    { id: "1", title: "Beginner gardening", uploader: "Garden Lab" },
+    { id: "2", title: "Advanced Mario combos", uploader: "Smash School" },
+    { id: "3", title: "Pasta tonight", uploader: "Kitchen" }
+  ], {
+    history: [{ id: "h", title: "Mario movement guide", uploader: "Smash School" }],
+    saved: [{ id: "s", title: "Kazuya combo routes", uploader: "Smash School" }],
+    searches: ["Mario combos"]
+  });
+  assert.equal(ranked[0].id, "2");
 });
 
 test("selects progressive streams from highest quality down", () => {
