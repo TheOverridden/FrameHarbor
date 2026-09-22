@@ -61,7 +61,7 @@ export function normalizeYoutubeVideo(item = {}) {
 
 export function normalizeInvidiousVideo(item = {}) {
   const thumbnails = item.videoThumbnails || [];
-  const thumbnail = thumbnails.find((entry) => entry.quality === "maxresdefault")?.url
+  const thumbnail = item.videoId ? `https://i.ytimg.com/vi/${encodeURIComponent(item.videoId)}/hqdefault.jpg` : thumbnails.find((entry) => entry.quality === "maxresdefault")?.url
     || thumbnails.find((entry) => entry.quality === "medium")?.url
     || thumbnails.at(-1)?.url
     || "";
