@@ -149,6 +149,8 @@ html[data-theme="light"] .hero { background: radial-gradient(circle at 75% 20%, 
 .watch-page { width: min(1680px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(310px, 410px); gap: 26px; }
 .player-shell { position: relative; overflow: hidden; aspect-ratio: 16 / 9; border-radius: 18px; background: #000; box-shadow: var(--shadow); }
 .player-shell video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.player-shell iframe { width: 100%; height: 100%; display: block; border: 0; background: #000; }
+.fallback-watch .watch-side .empty-state { margin: 0; padding: 28px 22px; }
 .player-overlay { position: absolute; inset: 0; display: grid; place-items: center; color: white; background: #050608; }
 .player-overlay[hidden] { display: none; }
 .player-spinner { width: 42px; height: 42px; border: 3px solid rgba(255,255,255,.18); border-top-color: var(--accent-2); border-radius: 50%; animation: spin .75s linear infinite; }

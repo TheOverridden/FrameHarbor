@@ -210,6 +210,21 @@ function pageError(title, message, action = "retry") {
   </div></section>`;
 }
 
+function renderEmbedFallback(videoId, reason = "The public Piped instances could not provide a playable stream.") {
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&rel=0`;
+  app.innerHTML = `<section class="watch-page fallback-watch">
+    <div class="watch-main">
+      <div class="player-shell">
+        <iframe src="${escapeHtml(embedUrl)}" title="Video player" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>
+      <h1 class="watch-title">Playing through privacy-enhanced fallback</h1>
+      <div class="description-box"><strong>Piped fallback active</strong>\n\n${escapeHtml(reason)} FrameHarbor kept you on the same page and switched to YouTube’s privacy-enhanced embed so the video can still play.</div>
+    </div>
+    <aside class="watch-side"><div class="empty-state"><div class="empty-icon">${icon("play")}</div><h1>Still in FrameHarbor</h1><p>The fallback player is embedded here; no tab change required.</p><button class="button secondary" type="button" data-action="retry-watch" data-video-id="${escapeHtml(videoId)}">Retry Piped</button></div></aside>
+  </section>`;
+  document.title = "Watch · FrameHarbor";
+}
+
 function emptyState(title, message, iconName = "compass") {
   return `<div class="empty-state"><div class="empty-icon">${icon(iconName)}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></div>`;
 }
@@ -399,7 +414,7 @@ async function renderWatch(videoId, { forceFailover = false } = {}) {
     document.title = `${data.title || "Watch"} · FrameHarbor`;
     attachPlayer(data, videoId);
   } catch (error) {
-    if (token === state.requestToken) pageError("This video won’t dock", error.message, "retry-watch");
+    if (token === state.requestToken) renderEmbedFallback(videoId, error.message);
   }
 }
 
