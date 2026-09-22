@@ -7,6 +7,8 @@ import {
   formatDuration,
   getRoute,
   normalizeVideo,
+  normalizeYoutubeVideo,
+  parseApiKeys,
   parseInstanceMarkdown,
   routeForVideo,
   sortProgressiveStreams,
@@ -23,6 +25,20 @@ test("cleans API URLs conservatively", () => {
   assert.equal(cleanApiUrl("https://api.example.com/"), "https://api.example.com");
   assert.equal(cleanApiUrl("http://api.example.com"), "");
   assert.equal(cleanApiUrl("javascript:alert(1)"), "");
+});
+
+test("parses, filters, and deduplicates browser-stored API keys", () => {
+  const a = "AIzaExampleKeyOne1234567890";
+  const b = "AIzaExampleKeyTwo1234567890";
+  assert.deepEqual(parseApiKeys(`${a}, ${b}\n${a} short`), [a, b]);
+});
+
+test("normalizes YouTube Data API videos", () => {
+  const video = normalizeYoutubeVideo({ id: "abc123", snippet: { title: "Demo", channelTitle: "Creator", channelId: "UC1", thumbnails: { high: { url: "https://img.example/demo.jpg" } } }, contentDetails: { duration: "PT1M5S" }, statistics: { viewCount: "1200" } });
+  assert.equal(video.id, "abc123");
+  assert.equal(video.duration, 65);
+  assert.equal(video.views, 1200);
+  assert.equal(video.uploaderUrl, "/channel/UC1");
 });
 
 test("extracts video and channel IDs", () => {
