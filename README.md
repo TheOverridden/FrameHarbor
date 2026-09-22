@@ -5,11 +5,14 @@ FrameHarbor is a dependency-free, single-page video browser powered by the YouTu
 ## What it does
 
 - Keeps search, channel, library, and watch navigation inside one browser tab.
+- Supports multiple password-protected local profiles with separate history, Watch Later lists, and search signals.
+- Ranks the home feed and Up Next videos with a small on-device recommendation model based on watched titles, channels, searches, and Watch Later choices.
 - Accepts multiple YouTube Data API keys and rotates to the next key when one fails or exhausts quota.
 - Stores optional keys only in the current browser's local storage; keys are never committed to the repository.
 - Races small batches of official public Invidious instances, then uses Piped when no key is configured or YouTube API access fails.
 - Discovers current instances from TeamPiped's public documentation and retains a bundled fallback list.
 - Stores settings, watch history, and saved videos only in the current browser.
+- Salts and hashes local profile passwords with PBKDF2; profiles never leave the current browser and are not cross-device accounts.
 - Runs as static HTML, CSS, and JavaScript on GitHub Pages.
 
 ## Local preview

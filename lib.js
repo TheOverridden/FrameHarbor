@@ -175,6 +175,31 @@ export function uniqueVideos(items = []) {
   return items.map(normalizeVideo).filter((video) => video.id && !seen.has(video.id) && seen.add(video.id));
 }
 
+const RECOMMENDATION_STOPWORDS = new Set([
+  "about", "after", "again", "from", "have", "into", "just", "live", "more", "official", "that", "their", "this", "video", "what", "when", "where", "with", "your"
+]);
+
+function recommendationTokens(value = "") {
+  return String(value).toLowerCase().match(/[a-z0-9]{3,}/g)?.filter((token) => !RECOMMENDATION_STOPWORDS.has(token)) || [];
+}
+
+export function rankRecommendedVideos(items = [], { history = [], saved = [], searches = [] } = {}) {
+  const weights = new Map();
+  const addSignal = (value, weight) => recommendationTokens(value).forEach((token) => weights.set(token, (weights.get(token) || 0) + weight));
+  saved.slice(0, 40).forEach((video) => addSignal(`${video.title} ${video.uploader}`, 5));
+  history.slice(0, 50).forEach((video, index) => addSignal(`${video.title} ${video.uploader}`, Math.max(1, 4 - index / 18)));
+  searches.slice(-30).forEach((query, index, list) => addSignal(query, 2 + index / Math.max(1, list.length)));
+
+  return uniqueVideos(items)
+    .map((video, index) => {
+      const score = recommendationTokens(`${video.title} ${video.uploader} ${video.description}`)
+        .reduce((total, token) => total + (weights.get(token) || 0), 0);
+      return { video, score, index };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ video }) => video);
+}
+
 export function sortProgressiveStreams(streams = []) {
   return [...streams]
     .filter((stream) => stream?.url && !stream.videoOnly)

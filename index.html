@@ -55,7 +55,7 @@
         <button class="icon-button" type="button" aria-label="Toggle theme" data-action="toggle-theme">
           <svg><use href="#i-sun"></use></svg>
         </button>
-        <button class="avatar-button" type="button" aria-label="Open settings" data-action="open-settings">FH</button>
+        <button class="avatar-button" type="button" aria-label="Sign in" data-action="open-account">FH</button>
       </div>
     </header>
 
@@ -65,7 +65,7 @@
         <a href="?page=explore" data-route data-nav="explore"><svg><use href="#i-compass"></use></svg><span>Explore</span></a>
         <div class="nav-divider"></div>
         <a href="?page=history" data-route data-nav="history"><svg><use href="#i-clock"></use></svg><span>History</span></a>
-        <a href="?page=saved" data-route data-nav="saved"><svg><use href="#i-bookmark"></use></svg><span>Saved</span></a>
+        <a href="?page=saved" data-route data-nav="saved"><svg><use href="#i-bookmark"></use></svg><span>Watch later</span></a>
         <div class="nav-divider"></div>
         <button type="button" data-action="open-settings"><svg><use href="#i-settings"></use></svg><span>Settings</span></button>
       </nav>
@@ -128,7 +128,36 @@
       </form>
     </dialog>
 
+    <dialog id="account-dialog" class="settings-dialog account-dialog">
+      <form method="dialog" class="dialog-shell" id="account-form">
+        <div class="dialog-head">
+          <div><span class="eyebrow">Local profiles</span><h2>FrameHarbor account</h2></div>
+          <button class="icon-button" value="cancel" aria-label="Close account"><svg><use href="#i-x"></use></svg></button>
+        </div>
+        <div id="account-signed-out" class="account-panel">
+          <p class="account-intro">Keep a separate recommendation feed, Watch Later list, and history on this device. Nothing is uploaded to FrameHarbor.</p>
+          <label>Profile name
+            <input id="account-name" type="text" minlength="3" maxlength="32" autocomplete="username" placeholder="Override" />
+          </label>
+          <label>Password
+            <input id="account-password" type="password" minlength="6" maxlength="128" autocomplete="current-password" placeholder="At least 6 characters" />
+          </label>
+          <small class="field-note">Passwords are salted and hashed before being stored. Profiles remain local to this browser and do not sync between devices.</small>
+          <div class="dialog-actions split-actions">
+            <button class="button secondary" type="button" data-action="account-create">Create profile</button>
+            <button class="button primary" type="button" data-action="account-signin">Sign in</button>
+          </div>
+        </div>
+        <div id="account-signed-in" class="account-panel" hidden>
+          <div class="profile-card"><span class="profile-avatar" id="profile-avatar">FH</span><div><span class="eyebrow">Signed in locally</span><h3 id="profile-name">Profile</h3></div></div>
+          <div class="profile-stats"><div><b id="profile-history-count">0</b><span>watched</span></div><div><b id="profile-saved-count">0</b><span>watch later</span></div><div><b id="profile-search-count">0</b><span>searches</span></div></div>
+          <p class="account-intro">Your home feed is ranked from this profile’s recent watches, saved videos, channels, and searches.</p>
+          <div class="dialog-actions"><button class="button secondary" type="button" data-action="account-signout">Sign out</button></div>
+        </div>
+      </form>
+    </dialog>
+
     <noscript><div class="noscript">FrameHarbor needs JavaScript to search and play videos.</div></noscript>
-    <script type="module" src="app.js?v=7"></script>
+    <script type="module" src="app.js?v=8"></script>
   </body>
 </html>

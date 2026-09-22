@@ -14,18 +14,20 @@ import {
   parseApiKeys,
   parseInstanceMarkdown,
   plainText,
+  rankRecommendedVideos,
   routeForChannel,
   routeForVideo,
   sortProgressiveStreams,
   uniqueVideos,
   videoIdFromUrl
-} from "./lib.js?v=2";
+} from "./lib.js?v=3";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const app = $("#app");
 const searchInput = $("#search-input");
 const suggestions = $("#suggestions");
 const settingsDialog = $("#settings-dialog");
+const accountDialog = $("#account-dialog");
 const STORAGE_KEY = "frameharbor:v1";
 const MAX_HISTORY = 80;
 
@@ -41,16 +43,32 @@ function loadState() {
     invidiousInstance: INVIDIOUS_INSTANCES[0],
     fastPlayback: true,
     history: [],
-    saved: []
+    saved: [],
+    searches: [],
+    accounts: {},
+    currentProfile: ""
   };
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    const accounts = stored.accounts && typeof stored.accounts === "object" ? stored.accounts : {};
+    Object.keys(accounts).forEach((key) => {
+      const profile = accounts[key] || {};
+      accounts[key] = {
+        ...profile,
+        history: Array.isArray(profile.history) ? profile.history : [],
+        saved: Array.isArray(profile.saved) ? profile.saved : [],
+        searches: Array.isArray(profile.searches) ? profile.searches : []
+      };
+    });
     return {
       ...fallback,
       ...stored,
       youtubeKeys: Array.isArray(stored.youtubeKeys) ? stored.youtubeKeys.filter((key) => typeof key === "string") : [],
       history: Array.isArray(stored.history) ? stored.history : [],
-      saved: Array.isArray(stored.saved) ? stored.saved : []
+      saved: Array.isArray(stored.saved) ? stored.saved : [],
+      searches: Array.isArray(stored.searches) ? stored.searches : [],
+      accounts,
+      currentProfile: typeof stored.currentProfile === "string" && accounts[stored.currentProfile] ? stored.currentProfile : ""
     };
   } catch {
     return fallback;
@@ -62,12 +80,45 @@ const state = {
   instances: [...DEFAULT_INSTANCES],
   activeInstance: "",
   requestToken: 0,
-  suggestionTimer: null
+  suggestionTimer: null,
+  videoCache: new Map()
 };
 
 function persist() {
-  const { theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, invidiousInstance, fastPlayback, history, saved } = state;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, invidiousInstance, fastPlayback, history, saved }));
+  const { theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, invidiousInstance, fastPlayback, history, saved, searches, accounts, currentProfile } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, region, instance, failover, searchProvider, youtubeKeys, youtubeKeyIndex, invidiousInstance, fastPlayback, history, saved, searches, accounts, currentProfile }));
+}
+
+function activeProfile() {
+  return state.currentProfile ? state.accounts[state.currentProfile] || null : null;
+}
+
+function libraryItems(kind) {
+  const profile = activeProfile();
+  return profile ? profile[kind] || [] : state[kind] || [];
+}
+
+function setLibraryItems(kind, items) {
+  const profile = activeProfile();
+  if (profile) profile[kind] = items;
+  else state[kind] = items;
+  persist();
+}
+
+function recommendationSignals() {
+  return { history: libraryItems("history"), saved: libraryItems("saved"), searches: libraryItems("searches") };
+}
+
+function cacheVideos(videos = []) {
+  videos.forEach((video) => { if (video?.id) state.videoCache.set(video.id, video); });
+}
+
+function updateAccountButton() {
+  const button = $("[data-action='open-account']");
+  if (!button) return;
+  const profile = activeProfile();
+  button.textContent = profile ? initials(profile.displayName) : "FH";
+  button.setAttribute("aria-label", profile ? `Open account for ${profile.displayName}` : "Sign in");
 }
 
 function escapeHtml(value = "") {
@@ -379,20 +430,23 @@ function renderEmbedFallback(videoId, reason = "The public Piped instances could
 async function renderFastWatch(videoId) {
   setActiveNav("");
   const token = ++state.requestToken;
-  const known = state.history.find((item) => item.id === videoId) || state.saved.find((item) => item.id === videoId);
+  const known = libraryItems("history").find((item) => item.id === videoId)
+    || libraryItems("saved").find((item) => item.id === videoId)
+    || state.videoCache.get(videoId);
+  const trackedVideo = known || normalizeVideo({ id: videoId, title: "Video", thumbnail: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg` });
   const embedUrl = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&rel=0`;
   app.innerHTML = `<section class="watch-page fallback-watch">
     <div class="watch-main">
       <div class="player-shell"><iframe src="${escapeHtml(embedUrl)}" title="Video player" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
-      <h1 class="watch-title">${escapeHtml(known?.title || "Video")}</h1>
+      <h1 class="watch-title">${escapeHtml(trackedVideo.title)}</h1>
       <div class="watch-meta-row"><div class="channel-block"><span class="watch-avatar avatar-fallback">FH</span><span><b id="fast-channel">${escapeHtml(known?.uploader || "FrameHarbor fast player")}</b><small>Privacy-enhanced YouTube embed</small></span></div>
-        <div class="watch-actions"><button class="action-pill ${isSaved(videoId) ? "active" : ""}" type="button" data-action="toggle-save" data-video-id="${escapeHtml(videoId)}">${icon("bookmark")}<span>${isSaved(videoId) ? "Saved" : "Save"}</span></button><button class="action-pill" type="button" data-action="share">${icon("share")}<span>Share</span></button></div></div>
+        <div class="watch-actions"><button class="action-pill ${isSaved(videoId) ? "active" : ""}" type="button" data-action="toggle-save" data-video-id="${escapeHtml(videoId)}">${icon("bookmark")}<span>${isSaved(videoId) ? "Saved" : "Watch later"}</span></button><button class="action-pill" type="button" data-action="share">${icon("share")}<span>Share</span></button></div></div>
       <div class="description-box" id="fast-description"><strong>Fast playback</strong> · No Piped wait\n\nThe video is embedded inside FrameHarbor using YouTube’s privacy-enhanced domain.</div>
     </div>
     <aside class="watch-side"><div class="empty-state"><div class="empty-icon">${icon("play")}</div><h1>Instant playback</h1><p>Search metadata uses your configured API keys. Playback stays embedded in this page.</p><button class="button secondary" type="button" data-action="retry-watch" data-video-id="${escapeHtml(videoId)}">Try Piped player</button></div></aside>
   </section>`;
-  document.title = `${known?.title || "Watch"} · FrameHarbor`;
-  if (known) addHistory(known);
+  document.title = `${trackedVideo.title || "Watch"} · FrameHarbor`;
+  addHistory(trackedVideo);
   if (!state.youtubeKeys.length) return;
   try {
     const video = await youtube.video(videoId);
@@ -452,17 +506,21 @@ async function renderHome(explore = false) {
   setActiveNav(explore ? "explore" : "home");
   const token = ++state.requestToken;
   const chips = ["All", "Gaming", "Music", "Technology", "News", "Live", "Documentaries"];
+  const signals = recommendationSignals();
+  const hasTaste = signals.history.length || signals.saved.length || signals.searches.length;
   app.innerHTML = `<section class="page">
     ${explore ? `<div class="page-head"><div><span class="eyebrow">Explore ${escapeHtml(state.region)}</span><h1>What’s moving right now</h1><p>Trending videos routed through a public Piped instance.</p></div></div>` : `<div class="hero"><div class="hero-content"><span class="eyebrow">Private by design</span><h1>Watch widely.<br>Leave a smaller wake.</h1><p>Search, discover, and play videos without hopping between pages—or feeding the usual surveillance buffet.</p><form class="hero-search" id="hero-search"><input type="search" placeholder="What do you want to watch?" aria-label="Search videos" /><button class="button primary">Search</button></form></div></div>`}
     <div class="chips" aria-label="Search categories">${chips.map((chip, index) => `<button class="chip ${index === 0 ? "active" : ""}" type="button" data-category="${escapeHtml(chip)}">${escapeHtml(chip)}</button>`).join("")}</div>
-    <div class="section-head"><h2>${explore ? "Trending now" : "Popular today"}</h2><span class="subtle">${escapeHtml(state.region)}</span></div>
+    <div class="section-head"><h2>${explore ? "Trending now" : hasTaste ? "For you" : "Popular today"}</h2><span class="subtle">${escapeHtml(state.region)}</span></div>
     <div id="feed">${skeletonGrid(12)}</div>
   </section>`;
   try {
     const data = await api.trending();
     if (token !== state.requestToken) return;
     const videos = uniqueVideos(Array.isArray(data) ? data : data?.items || []);
-    $("#feed").innerHTML = videos.length ? `<div class="video-grid">${videos.map(videoCard).join("")}</div>` : emptyState("Nothing surfaced", "This Piped instance returned an empty trending feed.");
+    cacheVideos(videos);
+    const ordered = explore || !hasTaste ? videos : rankRecommendedVideos(videos, signals);
+    $("#feed").innerHTML = ordered.length ? `<div class="video-grid">${ordered.map(videoCard).join("")}</div>` : emptyState("Nothing surfaced", "The current discovery provider returned an empty feed.");
   } catch (error) {
     if (token === state.requestToken) $("#feed").innerHTML = emptyState("Popular feed temporarily unavailable", "Search directly above, or add a free YouTube Data API key in Settings for the most reliable results.");
   }
@@ -477,6 +535,7 @@ async function renderSearch(query) {
     const data = await api.search(query);
     if (token !== state.requestToken) return;
     const videos = uniqueVideos(data?.items || data || []);
+    cacheVideos(videos);
     $("#search-results").innerHTML = videos.length ? videos.map(resultCard).join("") : emptyState("No videos found", `Nothing matched “${query}”. Try a broader phrase.`, "search");
   } catch (error) {
     if (token === state.requestToken) pageError("Search ran aground", error.message);
@@ -484,11 +543,12 @@ async function renderSearch(query) {
 }
 
 function addHistory(video) {
-  state.history = [video, ...state.history.filter((item) => item.id !== video.id)].slice(0, MAX_HISTORY);
-  persist();
+  if (!video?.id) return;
+  const history = libraryItems("history");
+  setLibraryItems("history", [video, ...history.filter((item) => item.id !== video.id)].slice(0, MAX_HISTORY));
 }
 
-function isSaved(id) { return state.saved.some((item) => item.id === id); }
+function isSaved(id) { return libraryItems("saved").some((item) => item.id === id); }
 
 function attachPlayer(data, videoId) {
   const video = $("#main-player");
@@ -574,6 +634,8 @@ async function renderWatch(videoId, { forceFailover = false } = {}) {
     const video = normalizeVideo({ ...data, id: videoId, uploaderAvatar: data.uploaderAvatar || "" });
     addHistory(video);
     const saved = isSaved(videoId);
+    const related = rankRecommendedVideos(data.relatedStreams || [], recommendationSignals());
+    cacheVideos(related);
     app.innerHTML = `<section class="watch-page">
       <div class="watch-main">
         <div class="player-shell"><div class="player-overlay" id="player-overlay"><span class="player-spinner"></span></div><video id="main-player" controls playsinline preload="metadata" poster="${escapeHtml(safeUrl(data.thumbnailUrl))}"></video></div>
@@ -584,7 +646,7 @@ async function renderWatch(videoId, { forceFailover = false } = {}) {
             <span><b>${escapeHtml(data.uploader || "Unknown channel")} ${data.uploaderVerified ? '<span class="verified">●</span>' : ""}</b><small>${compactNumber(data.views || 0)} views · ${escapeHtml(formatDate(data.uploadDate))}</small></span>
           </a>
           <div class="watch-actions">
-            <button class="action-pill ${saved ? "active" : ""}" type="button" data-action="toggle-save" data-video-id="${escapeHtml(videoId)}">${icon("bookmark")}<span>${saved ? "Saved" : "Save"}</span></button>
+            <button class="action-pill ${saved ? "active" : ""}" type="button" data-action="toggle-save" data-video-id="${escapeHtml(videoId)}">${icon("bookmark")}<span>${saved ? "Saved" : "Watch later"}</span></button>
             <button class="action-pill" type="button" data-action="share">${icon("share")}<span>Share</span></button>
             <select class="action-pill" id="quality-select" aria-label="Video quality" hidden></select>
           </div>
@@ -592,7 +654,7 @@ async function renderWatch(videoId, { forceFailover = false } = {}) {
         <div class="description-box ${String(data.description || "").length > 500 ? "collapsed" : ""}" data-action="expand-description"><strong>${compactNumber(data.likes || 0)} likes</strong> · ${escapeHtml(formatDate(data.uploadDate))}\n\n${escapeHtml(plainText(data.description || "No description provided."))}</div>
         <section class="comments"><div class="section-head"><h2>Comments</h2></div>${renderComments(commentsResult)}</section>
       </div>
-      <aside class="watch-side"><div class="section-head" style="margin-top:0"><h2>Up next</h2></div><div class="related-list">${uniqueVideos(data.relatedStreams || []).slice(0, 24).map(relatedCard).join("")}</div></aside>
+      <aside class="watch-side"><div class="section-head" style="margin-top:0"><h2>Up next</h2></div><div class="related-list">${related.slice(0, 24).map(relatedCard).join("")}</div></aside>
     </section>`;
     document.title = `${data.title || "Watch"} · FrameHarbor`;
     attachPlayer(data, videoId);
@@ -609,6 +671,7 @@ async function renderChannel(channelId) {
     const data = await api.channel(channelId);
     if (token !== state.requestToken) return;
     const videos = uniqueVideos(data.relatedStreams || []);
+    cacheVideos(videos);
     app.innerHTML = `<section class="page">
       <div class="channel-hero"><div class="channel-banner">${safeUrl(data.bannerUrl) ? `<img src="${escapeHtml(safeUrl(data.bannerUrl))}" alt="" referrerpolicy="no-referrer" />` : ""}</div>
         <div class="channel-profile">${avatar(data.avatarUrl, data.name, "channel-avatar-large")}<div><h1>${escapeHtml(data.name || "Channel")} ${data.verified ? '<span class="verified">●</span>' : ""}</h1><p>${compactNumber(data.subscriberCount || 0)} subscribers</p></div></div>
@@ -625,11 +688,12 @@ async function renderChannel(channelId) {
 function renderLibrary(kind) {
   const historyMode = kind === "history";
   setActiveNav(kind);
-  const items = historyMode ? state.history : state.saved;
-  const title = historyMode ? "Watch history" : "Saved videos";
-  const text = historyMode ? "Stored only in this browser." : "Your local watch-later shelf.";
+  const items = libraryItems(historyMode ? "history" : "saved");
+  const title = historyMode ? "Watch history" : "Watch later";
+  const owner = activeProfile()?.displayName;
+  const text = owner ? `${owner}'s private local library.` : historyMode ? "Stored only in this browser." : "Your local watch-later shelf.";
   app.innerHTML = `<section class="page"><div class="page-head"><div><span class="eyebrow">Your library</span><h1>${title}</h1><p>${text}</p></div>${items.length ? `<button class="button secondary" data-action="clear-${kind}">Clear ${historyMode ? "history" : "saved"}</button>` : ""}</div>
-    ${items.length ? `<div class="video-grid">${items.map(videoCard).join("")}</div>` : emptyState(historyMode ? "No watch history yet" : "Nothing saved yet", historyMode ? "Videos you open will appear here—locally, without an account." : "Use the Save button beneath a video to keep it here.", historyMode ? "clock" : "bookmark")}
+    ${items.length ? `<div class="video-grid">${items.map(videoCard).join("")}</div>` : emptyState(historyMode ? "No watch history yet" : "Watch Later is empty", historyMode ? "Videos you open will appear here automatically." : "Use the Watch later button beneath a video to keep it here.", historyMode ? "clock" : "bookmark")}
   </section>`;
 }
 
@@ -651,7 +715,11 @@ function submitSearch(value) {
   if (!query) return;
   const directId = videoIdFromUrl(query);
   if (directId) routeTo(routeForVideo(directId));
-  else routeTo(`?q=${encodeURIComponent(query)}`);
+  else {
+    const searches = libraryItems("searches").filter((item) => item.toLowerCase() !== query.toLowerCase());
+    setLibraryItems("searches", [...searches, query].slice(-50));
+    routeTo(`?q=${encodeURIComponent(query)}`);
+  }
 }
 
 async function updateSuggestions(query) {
@@ -663,6 +731,106 @@ async function updateSuggestions(query) {
     suggestions.innerHTML = items.map((item) => `<button type="button" data-suggestion="${escapeHtml(item)}">${icon("search")}<span>${escapeHtml(item)}</span></button>`).join("");
     suggestions.hidden = !items.length;
   } catch { suggestions.hidden = true; }
+}
+
+function profileId(name) {
+  return `profile:${encodeURIComponent(String(name).trim().toLocaleLowerCase())}`;
+}
+
+function bytesToBase64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function base64ToBytes(value) {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+}
+
+async function hashProfilePassword(password, salt) {
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: base64ToBytes(salt), iterations: 150000 }, material, 256);
+  return bytesToBase64(new Uint8Array(bits));
+}
+
+function accountCredentials() {
+  const displayName = $("#account-name").value.trim();
+  const password = $("#account-password").value;
+  if (displayName.length < 3) throw new Error("Profile names need at least 3 characters.");
+  if (password.length < 6) throw new Error("Passwords need at least 6 characters.");
+  return { displayName, password, id: profileId(displayName) };
+}
+
+function renderAccountPanel() {
+  const profile = activeProfile();
+  $("#account-signed-out").hidden = Boolean(profile);
+  $("#account-signed-in").hidden = !profile;
+  if (!profile) return;
+  $("#profile-avatar").textContent = initials(profile.displayName);
+  $("#profile-name").textContent = profile.displayName;
+  $("#profile-history-count").textContent = profile.history.length;
+  $("#profile-saved-count").textContent = profile.saved.length;
+  $("#profile-search-count").textContent = profile.searches.length;
+}
+
+function openAccount() {
+  $("#account-name").value = "";
+  $("#account-password").value = "";
+  renderAccountPanel();
+  accountDialog.showModal();
+}
+
+async function createAccount() {
+  try {
+    const { displayName, password, id } = accountCredentials();
+    if (state.accounts[id]) throw new Error("That local profile already exists. Sign in instead.");
+    const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+    const salt = bytesToBase64(saltBytes);
+    const passwordHash = await hashProfilePassword(password, salt);
+    state.accounts[id] = {
+      displayName,
+      salt,
+      passwordHash,
+      createdAt: new Date().toISOString(),
+      history: [...state.history],
+      saved: [...state.saved],
+      searches: [...state.searches]
+    };
+    state.currentProfile = id;
+    persist();
+    updateAccountButton();
+    renderAccountPanel();
+    renderRoute();
+    toast("Profile created", `${displayName} is signed in on this device.`);
+  } catch (error) {
+    toast("Could not create profile", error.message, "error");
+  }
+}
+
+async function signInAccount() {
+  try {
+    const { displayName, password, id } = accountCredentials();
+    const profile = state.accounts[id];
+    if (!profile) throw new Error("No local profile has that name.");
+    const passwordHash = await hashProfilePassword(password, profile.salt);
+    if (passwordHash !== profile.passwordHash) throw new Error("Incorrect password.");
+    state.currentProfile = id;
+    persist();
+    updateAccountButton();
+    renderAccountPanel();
+    renderRoute();
+    toast("Signed in", `Welcome back, ${displayName}.`);
+  } catch (error) {
+    toast("Sign-in failed", error.message, "error");
+  }
+}
+
+function signOutAccount() {
+  const name = activeProfile()?.displayName || "Profile";
+  state.currentProfile = "";
+  persist();
+  updateAccountButton();
+  accountDialog.close();
+  renderRoute();
+  toast("Signed out", `${name}'s library remains on this device.`);
 }
 
 function openSettings() {
@@ -719,6 +887,10 @@ document.addEventListener("click", (event) => {
     document.documentElement.dataset.theme = state.theme;
     persist();
   }
+  if (action === "open-account") openAccount();
+  if (action === "account-create") createAccount();
+  if (action === "account-signin") signInAccount();
+  if (action === "account-signout") signOutAccount();
   if (action === "open-settings") openSettings();
   if (action === "save-settings") { event.preventDefault(); saveSettings(); }
   if (action === "toggle-key-visibility") {
@@ -734,21 +906,21 @@ document.addEventListener("click", (event) => {
   if (action === "share") navigator.clipboard.writeText(location.href).then(() => toast("Link copied", "Ready to share."));
   if (action === "toggle-save") {
     const id = event.target.closest("[data-video-id]").dataset.videoId;
-    if (isSaved(id)) state.saved = state.saved.filter((item) => item.id !== id);
+    const savedItems = libraryItems("saved");
+    if (isSaved(id)) setLibraryItems("saved", savedItems.filter((item) => item.id !== id));
     else {
-      const item = state.history.find((candidate) => candidate.id === id);
-      if (item) state.saved.unshift(item);
+      const item = libraryItems("history").find((candidate) => candidate.id === id) || state.videoCache.get(id);
+      if (item) setLibraryItems("saved", [item, ...savedItems.filter((candidate) => candidate.id !== id)]);
     }
-    persist();
     const button = event.target.closest("button");
     const saved = isSaved(id);
     button.classList.toggle("active", saved);
-    $("span", button).textContent = saved ? "Saved" : "Save";
-    toast(saved ? "Saved locally" : "Removed from saved");
+    $("span", button).textContent = saved ? "Saved" : "Watch later";
+    toast(saved ? "Added to Watch Later" : "Removed from Watch Later");
   }
   if (action === "expand-description") event.target.closest(".description-box").classList.toggle("collapsed");
-  if (action === "clear-history") { state.history = []; persist(); renderLibrary("history"); }
-  if (action === "clear-saved") { state.saved = []; persist(); renderLibrary("saved"); }
+  if (action === "clear-history") { setLibraryItems("history", []); renderLibrary("history"); }
+  if (action === "clear-saved") { setLibraryItems("saved", []); renderLibrary("saved"); }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -765,6 +937,7 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("submit", (event) => {
   if (event.target.id === "search-form") { event.preventDefault(); submitSearch(searchInput.value); }
   if (event.target.id === "hero-search") { event.preventDefault(); submitSearch($("input", event.target).value); }
+  if (event.target.id === "account-form") { event.preventDefault(); signInAccount(); }
 });
 
 document.addEventListener("click", (event) => {
@@ -786,6 +959,7 @@ searchInput.addEventListener("input", () => {
 window.addEventListener("popstate", renderRoute);
 document.documentElement.dataset.theme = state.theme;
 populateInstanceSelect();
+updateAccountButton();
 loadInstances();
 renderRoute();
 

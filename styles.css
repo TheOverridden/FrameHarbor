@@ -228,6 +228,17 @@ html[data-theme="light"] .hero { background: radial-gradient(circle at 75% 20%, 
 .switch-row small { display: block; margin-top: 3px; color: var(--muted); font-weight: 400; }
 .switch-row input { width: 43px; height: 24px; accent-color: var(--accent); }
 .dialog-actions { padding-top: 6px; display: flex; justify-content: flex-end; gap: 9px; }
+.account-dialog { width: min(560px, calc(100% - 28px)); }
+.account-panel { display: grid; gap: 17px; }
+.account-intro { margin: 0; color: var(--muted); line-height: 1.6; }
+.profile-card { padding: 18px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-2); }
+.profile-card h3 { margin: 3px 0 0; font-size: 22px; }
+.profile-avatar { width: 54px; height: 54px; display: grid; place-items: center; flex: 0 0 auto; color: white; font-weight: 850; border-radius: 50%; background: linear-gradient(145deg, #725cff, #239bc5); }
+.profile-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.profile-stats > div { padding: 14px 8px; display: grid; gap: 3px; text-align: center; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-2); }
+.profile-stats b { color: var(--text); font-size: 21px; }
+.profile-stats span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+.split-actions { justify-content: space-between; }
 
 .toast-region { position: fixed; z-index: 120; right: 22px; bottom: 22px; width: min(370px, calc(100% - 44px)); display: grid; gap: 10px; pointer-events: none; }
 .toast { padding: 13px 15px; display: grid; grid-template-columns: auto 1fr; gap: 11px; align-items: start; color: var(--text); border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: var(--shadow); animation: toast-in .22s ease-out; }
